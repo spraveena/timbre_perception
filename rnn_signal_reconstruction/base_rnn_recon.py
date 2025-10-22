@@ -223,24 +223,38 @@ if __name__ == "__main__":
     # Settings
     O = 2
     T = 1000
-    S = 20 # samples per class
-    sigma = 0.3
+    S = 300 # samples per class
+    sigma = 0.2
 
     # Five sets of frequencies and powers for five classes: shape (class, O x len(F))
     F_list = [
-        [2,8,16],
-        [2,6,12],
-        [3,9,15],
-        [1,5,14],
-        [4,10,18]
+        [210, 420, 630, 840, 1050, 1260],     # Class A: Piano (harmonics of 210Hz)
+        [195, 390, 585, 780, 975, 1170],      # Class B: Guitar (harmonics of 195Hz)
+        [195, 210, 390, 420, 630, 840],       # Class C: Combined, Guitar-dominant
+        [195, 210, 420, 630, 840, 1050],      # Class D: Combined, Piano-dominant  
+        [195, 210, 390, 585, 780, 975],       # Class E: Combined, Balanced
     ]
     # Powers: each class gets matrix shape [O, len(F)]
     P_list = [
-        np.array([[5,1,1],[2,2,6]]), 
-        np.array([[4,3,1],[1,5,2]]),
-        np.array([[7,2,2],[2,1,7]]),
-        np.array([[3,4,2],[4,2,3]]),
-        np.array([[2,2,6],[6,1,2]])
+        # Class A: Piano solo - rich harmonic content as mentioned in manuscript
+        np.array([[15, 12, 10, 8, 4, 3],    # Dim 0: main response
+                [9, 7, 6, 4, 3, 2]]),     # Dim 1: could represent different electrode
+
+        # Class B: Guitar solo - strong F0, weaker harmonics  
+        np.array([[12, 5, 5, 4, 4, 3],  # Very strong fundamental
+                [11, 4, 2, 1, 0.5, 0.3]]),
+        
+        # Class C: Guitar-primed combined (enhanced guitar harmonics)
+        np.array([[15, 8, 10, 7, 5, 3],    # Enhanced 195Hz and its harmonics
+                [10, 7, 5, 6, 4, 2]]),
+        
+        # Class D: Piano-primed combined (enhanced piano harmonics)  
+        np.array([[6, 12, 10, 10, 10, 5],    # Enhanced 210Hz and its harmonics
+                [5, 9, 7, 6, 5, 4]]),
+        
+        # Class E: No priming/balanced combined
+        np.array([[7, 7, 4, 4, 3, 3],     # Equal representation
+                [6, 6, 3, 3, 2, 2]]),
     ]
     # Create dataset
     train_loader, test_loader, input_dim, num_classes = build_dataset(
@@ -250,13 +264,13 @@ if __name__ == "__main__":
     model = RNNClassifierReconstructor(input_dim, hidden_dim, num_classes).to('cpu')
     # Choose options
     use_ce = True
-    use_mse = True
-    alpha = 1.0 # set to 0 to ignore MSE
+    use_mse = False
+    alpha = 0 # set to 0 to ignore MSE
     reconstruction_time = 0  # 0 = present, -1 = previous, +1 = future
     # Train
     train_accs, train_losses, test_accs, test_losses = train_model(
         model, train_loader, test_loader,
-        epochs=10, alpha=alpha, use_mse=use_mse, use_ce=use_ce, 
+        epochs=50, alpha=alpha, use_mse=use_mse, use_ce=use_ce, 
         reconstruction_time=reconstruction_time
     )
     # Plot

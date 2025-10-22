@@ -85,7 +85,7 @@ class RNNClassifierReconstructor(nn.Module):
 
 def pretrain_reconstruction(model, train_loader, test_loader, epochs=10, reconstruction_time=0, device='cpu'):
     mse_loss = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     train_losses, test_losses = [], []
     for ep in range(epochs):
         # Train
@@ -151,7 +151,7 @@ def plot_losses(train_losses, test_losses, title="Reconstruction loss"):
 
 def train_classification(model, train_loader, test_loader, epochs=10, device='cpu'):
     ce_loss = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     train_accs, test_accs, train_losses, test_losses = [], [], [], []
     for ep in range(epochs):
         model.train()
@@ -219,47 +219,108 @@ if __name__ == "__main__":
     # Dataset1: Pretraining dataset
     O = 2
     T = 500
-    S = 15
+    S = 200
     sigma_pre = 0.3        # Noise for pretraining set
     sigma_classify = 0.5   # Noise for classification set
 
     F_list_pre = [
-        [2,8,16],
-        [2,6,12],
-        [3,9,15],
-        [1,5,14],
-        [4,10,18]
+        # Piano-like variants (around 210Hz base)
+        [200, 400, 600, 800, 1000, 1200],      # Shifted down from 210
+        [215, 430, 645, 860, 1075, 1290],      # Shifted up from 210
+        [205, 410, 615, 820, 1025, 1230],      # Between 200-210
+        
+        # Guitar-like variants (around 195Hz base)  
+        [190, 380, 570, 760, 950, 1140],       # Shifted down from 195
+        [200, 400, 600, 800, 1000, 1200],      # Shifted up from 195
+        [192, 384, 576, 768, 960, 1152],       # Slight variation
+        
+        # Mixed harmonic structures (preparing for combined classes)
+        [190, 205, 380, 410, 570, 820],        # Mixed fundamentals (190+205)
+        [200, 215, 400, 430, 600, 860],        # Mixed fundamentals (200+215)
+        [192, 210, 384, 420, 630, 840],        # Close to actual combined
+        
+        # Additional variations for robustness
+        [198, 396, 594, 792, 990, 1188],       # In-between frequency
+        [207, 414, 621, 828, 1035, 1242],      # Another in-between
+        [193, 386, 579, 772, 965, 1158],       # Slight guitar variant
     ]
     P_list_pre = [
-        np.array([[5,1,1],[2,2,6]]),
-        np.array([[4,3,1],[1,5,2]]),
-        np.array([[7,2,2],[2,1,7]]),
-        np.array([[3,4,2],[4,2,3]]),
-        np.array([[2,2,6],[6,1,2]])
+        # Piano-like power distributions (strong harmonics)
+        np.array([[14, 11, 9, 7, 5, 3],
+                [8, 6, 5, 3, 2, 1]]),
+        
+        np.array([[13, 10, 8, 6, 4, 2],
+                [7, 5, 4, 3, 2, 1]]),
+        
+        np.array([[15, 12, 10, 8, 5, 3],
+                [9, 7, 6, 4, 3, 2]]),
+        
+        # Guitar-like power distributions (strong fundamental, rapid decay)
+        np.array([[20, 8, 6, 5, 3, 2],
+                [12, 5, 3, 2, 1, 0.5]]),
+        
+        np.array([[18, 7, 5, 4, 3, 2],
+                [10, 4, 3, 2, 1, 0.5]]),
+        
+        np.array([[22, 9, 7, 6, 4, 2],
+                [13, 6, 4, 3, 2, 1]]),
+        
+        # Mixed power distributions
+        np.array([[10, 10, 8, 8, 6, 4],
+                [7, 7, 5, 5, 3, 2]]),
+        
+        np.array([[8, 12, 6, 10, 5, 4],
+                [6, 8, 4, 6, 3, 2]]),
+        
+        np.array([[9, 9, 7, 7, 5, 3],
+                [6, 6, 4, 4, 3, 2]]),
+        
+        # Additional varied distributions
+        np.array([[16, 10, 8, 6, 4, 2],
+                [9, 6, 5, 4, 2, 1]]),
+        
+        np.array([[11, 9, 7, 5, 3, 2],
+                [7, 5, 4, 3, 2, 1]]),
+        
+        np.array([[19, 8, 6, 5, 3, 2],
+                [11, 5, 4, 3, 2, 1]]),
     ]
     # Dataset2: Classification dataset (DIFFERENT F and P)
     F_list_class = [
-        [3, 11, 22],
-        [6, 12, 18],
-        [5, 10, 20],
-        [8, 13, 19],
-        [10, 15, 16],
+        [210, 420, 630, 840, 1050, 1260],     # Class A: Piano (harmonics of 210Hz)
+        [195, 390, 585, 780, 975, 1170],      # Class B: Guitar (harmonics of 195Hz)
+        [195, 210, 390, 420, 630, 840],       # Class C: Combined, Guitar-dominant
+        [195, 210, 420, 630, 840, 1050],      # Class D: Combined, Piano-dominant  
+        [195, 210, 390, 585, 780, 975],       # Class E: Combined, Balanced
     ]
     P_list_class = [
-        np.array([[4,5,2],[2,1,7]]),
-        np.array([[1,2,7],[3,7,2]]),
-        np.array([[2,7,3],[6,3,2]]),
-        np.array([[6,2,3],[2,4,4]]),
-        np.array([[3,6,2],[4,2,5]])
-    ]
+        # Class A: Piano solo - rich harmonic content as mentioned in manuscript
+        np.array([[15, 12, 10, 8, 4, 3],    # Dim 0: main response
+                [9, 7, 6, 4, 3, 2]]),     # Dim 1: could represent different electrode
 
+        # Class B: Guitar solo - strong F0, weaker harmonics  
+        np.array([[12, 5, 5, 4, 4, 3],  # Very strong fundamental
+                [11, 4, 2, 1, 0.5, 0.3]]),
+        
+        # Class C: Guitar-primed combined (enhanced guitar harmonics)
+        np.array([[15, 8, 10, 7, 5, 3],    # Enhanced 195Hz and its harmonics
+                [10, 7, 5, 6, 4, 2]]),
+        
+        # Class D: Piano-primed combined (enhanced piano harmonics)  
+        np.array([[6, 12, 10, 10, 10, 5],    # Enhanced 210Hz and its harmonics
+                [5, 9, 7, 6, 5, 4]]),
+        
+        # Class E: No priming/balanced combined
+        np.array([[7, 7, 4, 4, 3, 3],     # Equal representation
+                [6, 6, 3, 3, 2, 2]]),
+    ]
     device = 'cpu'
     hidden_dim = 128
 
     # User toggles:
     pretrain_with_noise = True
     classify_with_noise = True
-    do_pretrain = True   # Toggle to compare w/o pretraining
+    do_pretrain = False   # Toggle to compare w/o pretraining
 
 
     # 1. Pretraining
@@ -273,7 +334,7 @@ if __name__ == "__main__":
     rnn = RNNClassifierReconstructor(input_dim, hidden_dim, num_classes).to(device)
 
     if do_pretrain:
-        pretrain_epochs = 10
+        pretrain_epochs = 200
         print("Pretraining on reconstruction loss...")
         train_losses_pt, test_losses_pt = pretrain_reconstruction(
             rnn, pretrain_loader, pretest_loader, epochs=pretrain_epochs, reconstruction_time=0, device=device)
@@ -299,7 +360,7 @@ if __name__ == "__main__":
         print('Training classification from scratch (no pretraining)...')
 
     # 3. Train classification head
-    clf_epochs = 10
+    clf_epochs = 200
     train_accs, test_accs, train_losses, test_losses = train_classification(
         rnn_clf, train_loader, test_loader, epochs=clf_epochs, device=device)
 

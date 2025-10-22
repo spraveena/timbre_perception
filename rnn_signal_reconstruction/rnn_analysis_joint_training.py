@@ -130,15 +130,19 @@ def extract_hidden(model, X, batch_size=32, device='cpu'):
     return np.concatenate(features, axis=0)
 
 def plot_2d(features, labels, title):
-    pca = PCA(n_components=2)
-    features2d = pca.fit_transform(features)
+
+    from sklearn.manifold import TSNE
+
+    tsne = TSNE(n_components=2, random_state=42, perplexity=30)
+    # pca = PCA(n_components=2)
+    features2d = tsne.fit_transform(features)
     num_classes = len(np.unique(labels))
     plt.figure(figsize=(5,5))
     for c in range(num_classes):
         idx = labels==c
-        plt.scatter(features2d[idx,0], features2d[idx,1], s=20, label=f"Class {c}", alpha=0.7)
+        plt.scatter(features2d[idx,0], features2d[idx,1], s=50, label=f"Class {c}", alpha=0.7)
     plt.legend()
-    plt.xlabel('PCA-1'); plt.ylabel('PCA-2')
+    plt.xlabel('tsne-1'); plt.ylabel('tsne-2')
     plt.title(title)
     plt.tight_layout()
     plt.show()
@@ -147,13 +151,35 @@ def plot_2d(features, labels, title):
 
 if __name__ == "__main__":
     # Dataset
-    O, T, S = 2, 500, 20
+    O, T, S = 2, 500, 300
     sigma = 0.3
-    F_list = [ [2,8,16],[2,6,12],[3,9,15],[1,5,14],[4,10,18] ]
+    F_list = [
+        [210, 420, 630, 840, 1050, 1260],     # Class A: Piano (harmonics of 210Hz)
+        [195, 390, 585, 780, 975, 1170],      # Class B: Guitar (harmonics of 195Hz)
+        [195, 210, 390, 420, 630, 840],       # Class C: Combined, Guitar-dominant
+        [195, 210, 420, 630, 840, 1050],      # Class D: Combined, Piano-dominant  
+        [195, 210, 390, 585, 780, 975],       # Class E: Combined, Balanced
+    ]
     P_list = [
-        np.array([[5,1,1],[2,2,6]]), np.array([[4,3,1],[1,5,2]]),
-        np.array([[7,2,2],[2,1,7]]), np.array([[3,4,2],[4,2,3]]),
-        np.array([[2,2,6],[6,1,2]])
+        # Class A: Piano solo - rich harmonic content as mentioned in manuscript
+        np.array([[18, 25, 20, 20, 18, 15],    # Dim 0: main response
+                [9, 7, 6, 4, 3, 2]]),     # Dim 1: could represent different electrode
+
+        # Class B: Guitar solo - strong F0, weaker harmonics  
+        np.array([[25, 12, 10, 12, 10, 5],  # Very strong fundamental
+                [11, 4, 2, 1, 0.5, 0.3]]),
+        
+        # Class C: Guitar-primed combined (enhanced guitar harmonics)
+        np.array([[20, 8, 18, 7, 5, 5],    # Enhanced 195Hz and its harmonics
+                [10, 7, 5, 6, 4, 2]]),
+        
+        # Class D: Piano-primed combined (enhanced piano harmonics)  
+        np.array([[6, 25, 18, 18, 16, 5],    # Enhanced 210Hz and its harmonics
+                [5, 9, 7, 6, 5, 4]]),
+        
+        # Class E: No priming/balanced combined
+        np.array([[7, 7, 4, 4, 3, 3],     # Equal representation
+                [6, 6, 3, 3, 2, 2]]),
     ]
     train_loader, test_loader, X_test, Y_test = build_dataset(O, F_list, P_list, T, S, sigma)
     input_dim, hidden_dim, num_classes = O, 128, 5
@@ -162,7 +188,7 @@ if __name__ == "__main__":
     joint_alpha = 1.0   # weight for reconstruction loss (0 means classification-only)
     use_recon = True    # Toggle here for joint training (False = just classification)
     checkpoint_dict, *_ = train_classification_joint(
-        model, train_loader, test_loader, epochs=10, alpha=joint_alpha, use_recon=use_recon
+        model, train_loader, test_loader, epochs=100, alpha=joint_alpha, use_recon=use_recon
     )
     # Plot features at 'pre', 'middle', 'after'
     for phase in ['pre','middle','after']:
