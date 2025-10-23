@@ -220,7 +220,7 @@ if __name__ == "__main__":
     O = 2
     T = 500
     S = 200
-    sigma_pre = 0.3        # Noise for pretraining set
+    sigma_pre = 0       # Noise for pretraining set
     sigma_classify = 0.5   # Noise for classification set
 
     F_list_pre = [
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     # User toggles:
     pretrain_with_noise = True
     classify_with_noise = True
-    do_pretrain = False   # Toggle to compare w/o pretraining
+    do_pretrain = True   # Toggle to compare w/o pretraining
 
 
     # 1. Pretraining
@@ -334,7 +334,7 @@ if __name__ == "__main__":
     rnn = RNNClassifierReconstructor(input_dim, hidden_dim, num_classes).to(device)
 
     if do_pretrain:
-        pretrain_epochs = 200
+        pretrain_epochs = 500
         print("Pretraining on reconstruction loss...")
         train_losses_pt, test_losses_pt = pretrain_reconstruction(
             rnn, pretrain_loader, pretest_loader, epochs=pretrain_epochs, reconstruction_time=0, device=device)
@@ -347,23 +347,34 @@ if __name__ == "__main__":
     # 2. Classification with different dataset
     print('\n###################\n  CLASSIFICATION\n###################')
     sigma = sigma_classify if classify_with_noise else 0.0
-    train_loader, test_loader, input_dim, num_classes = build_dataset(
-        O, F_list_class, P_list_class, T, S, sigma, split=(0.85, 0.15), seed=101)
+    test_accs_across_seeds = []
+    for seed in [42, 123, 456, 789, 101]:
+        train_loader, test_loader, input_dim, num_classes = build_dataset(
+            O, F_list_class, P_list_class, T, S, sigma, split=(0.85, 0.15), seed=seed)
 
-    ###### With/without pretraining toggle
-    # "reset" the model for classification task (i.e. new instance for comparison)
-    rnn_clf = RNNClassifierReconstructor(input_dim, hidden_dim, num_classes).to(device)
-    if do_pretrain:
-        print('Loading pretrained RNN weights for classification...')
-        rnn_clf.load_state_dict(pretrained_state_dict)
-    else:
-        print('Training classification from scratch (no pretraining)...')
+        ###### With/without pretraining toggle
+        # "reset" the model for classification task (i.e. new instance for comparison)
+        rnn_clf = RNNClassifierReconstructor(input_dim, hidden_dim, num_classes).to(device)
+        if do_pretrain:
+            print('Loading pretrained RNN weights for classification...')
+            rnn_clf.load_state_dict(pretrained_state_dict)
+        else:
+            print('Training classification from scratch (no pretraining)...')
 
-    # 3. Train classification head
-    clf_epochs = 200
-    train_accs, test_accs, train_losses, test_losses = train_classification(
-        rnn_clf, train_loader, test_loader, epochs=clf_epochs, device=device)
+        # 3. Train classification head
+        clf_epochs = 200
+        train_accs, test_accs, train_losses, test_losses = train_classification(
+            rnn_clf, train_loader, test_loader, epochs=clf_epochs, device=device)
+        test_accs_across_seeds.append(max(test_accs))
+        print(f'Seed {seed} - Max test accuracy: {max(test_accs):.4f}')
 
-    # 4. Plot classification curves
-    title = "Classification (with Pretraining)" if do_pretrain else "Classification (no Pretraining)"
-    plot_classification(train_accs, test_accs, train_losses, test_losses, title=title)
+        # 4. Plot classification curves
+        title = "Classification (with Pretraining)" if do_pretrain else "Classification (no Pretraining)"
+        plot_classification(train_accs, test_accs, train_losses, test_losses, title=title)
+    mean_test_accs = np.mean(test_accs_across_seeds)
+    std_test_accs = np.std(test_accs_across_seeds)
+    print(f'\n=== Results across {len(test_accs_across_seeds)} seeds ===')
+print(f'Mean max test accuracy: {np.mean(test_accs_across_seeds):.4f}')
+print(f'Std dev: {np.std(test_accs_across_seeds):.4f}')
+print(f'Min: {np.min(test_accs_across_seeds):.4f}')
+print(f'Max: {np.max(test_accs_across_seeds):.4f}')
